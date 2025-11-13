@@ -15,6 +15,34 @@ For production, set:
 VERSION=Prod
 
 The main difference is that production uses JWT authorization
+Using JWT Authorization in Production
+
+In production mode, all API and admin requests must include a valid JWT access token.
+
+Get a pair of tokens:
+
+POST /api/token/
+Body:
+{
+  "email": "your_email",
+  "password": "your_password"
+}
+
+Refresh the access token:
+POST /api/token/refresh/
+Body:
+{
+  "refresh": "your_refresh_token"
+}
+
+Use the token in requests:
+Add a header to any API or admin request:
+Authorization: Bearer your_access_token
+
+JWT authorization is required for:
+All API endpoints
+Any actions involving agents, missions, or targets
+
 Note: Automatic creation of the superadmin will only work in the test version. In production, you need to create the superadmin manually inside the container.
 
 To create a superadmin manually in production:
