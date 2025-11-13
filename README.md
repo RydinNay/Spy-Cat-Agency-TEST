@@ -15,6 +15,12 @@ For production, set:
 VERSION=Prod
 
 The main difference is that production uses JWT authorization
+Note: Automatic creation of the superadmin will only work in the test version. In production, you need to create the superadmin manually inside the container.
+
+To create a superadmin manually in production:
+docker-compose exec web bash
+python manage.py createsuperuser
+Follow the prompts to set username, email and password for the superadmin.
 
 API documentation is available at your_ip:your_port/swagger/
 
