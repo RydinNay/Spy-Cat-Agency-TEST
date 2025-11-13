@@ -11,9 +11,9 @@ class SpyCatsAdmin(admin.ModelAdmin):
     list_filter = ('breed',)
 
     def get_readonly_fields(self, request, obj=None):
-        if obj:  # editing existing object
+        if obj:
             return ('name', 'breed')
-        return ()  # creating new object, all fields editable
+        return ()
 
     def save_model(self, request, obj, form, change):
         if change:

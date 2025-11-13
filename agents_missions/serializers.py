@@ -11,19 +11,14 @@ class SpyTargetSerializer(serializers.ModelSerializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Після створення робимо name та country readonly
         if self.instance:
             self.fields['name'].read_only = True
             self.fields['country'].read_only = True
 
     def update(self, instance, validated_data):
-        """
-        Оновлювати notes і status можна лише якщо місія має агента
-        і таргет або місія не DONE
-        """
         if instance.mission.agent is None:
             raise serializers.ValidationError(
-                "Не можна змінювати таргет у місії без агента."
+                "You cannot change the target in a mission without an agent."
             )
 
         if instance.status != SpyTarget.TargetStatus.DONE and \
@@ -56,48 +51,48 @@ class SpyMissionSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         targets_data = validated_data.pop('targets', [])
         mission = SpyMission.objects.create(**validated_data)
+
         for target_data in targets_data:
             SpyTarget.objects.create(mission=mission, **target_data)
+
         self.update_mission_status(mission)
         return mission
 
     def update(self, instance, validated_data):
-        # Залишаємо старого агента, якщо не передано
-        agent = validated_data.get('agent', instance.agent)
+        new_agent = validated_data.get('agent', instance.agent)
 
-        # Заборона зміни агента, якщо місія вже не NOT_STARTED
-        if agent != instance.agent and instance.status != SpyMission.MissionStatus.NOT_STARTED:
-            agent = instance.agent
-
-        # Перевірка зайнятості агента по активних місіях
-        if agent != instance.agent:
-            old_missions = SpyMission.objects.filter(agent=agent).exclude(id=instance.id)
-            # Звільняємо агента у завершених місіях
-            old_missions.filter(status=SpyMission.MissionStatus.DONE).update(agent=None)
-            if old_missions.exclude(status=SpyMission.MissionStatus.DONE).exists():
+        if new_agent != instance.agent:
+            if instance.status != SpyMission.MissionStatus.NOT_STARTED:
                 raise serializers.ValidationError({
-                    "agent_id": "Цей агент уже призначений на активну місію."
+                    "agent_id": "You can only change the agent for missions in NOT_STARTED status."
                 })
 
-        instance.agent = agent
+            # Проверяем только активные миссии нового агента
+            active_missions = SpyMission.objects.filter(agent=new_agent)\
+                .exclude(id=instance.id)\
+                .exclude(status__in=[SpyMission.MissionStatus.DONE, SpyMission.MissionStatus.FAILED])
+            if active_missions.exists():
+                raise serializers.ValidationError({
+                    "agent_id": "This agent has already been assigned to an active mission."
+                })
 
-        # Статус можна міняти лише якщо є агент
+            instance.agent = new_agent
+
         if instance.agent is not None:
             instance.status = validated_data.get('status', instance.status)
         else:
             if 'status' in validated_data:
                 raise serializers.ValidationError(
-                    "Не можна змінювати статус місії без агента."
+                    "You cannot change the status of a mission without an agent."
                 )
 
         instance.save()
 
-        # --- Оновлення таргетів через self.initial_data ---
         targets_data = self.initial_data.get('targets')
         if targets_data is not None:
             if instance.agent is None:
                 raise serializers.ValidationError(
-                    "Не можна оновлювати таргети місії без агента."
+                    "You cannot update mission targets without an agent."
                 )
 
             for target_data in targets_data:
@@ -112,7 +107,7 @@ class SpyMissionSerializer(serializers.ModelSerializer):
                 serializer = SpyTargetSerializer(
                     instance=target,
                     data=target_data,
-                    partial=True,  # Важливо, щоб не чекати name і country
+                    partial=True,
                     context=self.context
                 )
                 serializer.is_valid(raise_exception=True)
@@ -122,12 +117,6 @@ class SpyMissionSerializer(serializers.ModelSerializer):
         return instance
 
     def update_mission_status(self, mission):
-        """
-        Автооновлення статусу місії за статусами таргетів:
-        - Якщо хоч один таргет in_progress, місія стає in_progress
-        - Якщо всі DONE або DONE+FAILED -> місія DONE
-        - Якщо всі FAILED -> місія FAILED
-        """
         if mission.agent is None:
             return
 

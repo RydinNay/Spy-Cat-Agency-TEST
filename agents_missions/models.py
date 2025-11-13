@@ -39,7 +39,7 @@ class SpyTarget(models.Model):
     )
     name = models.CharField(max_length=100)
     country = models.CharField(max_length=200)
-    notes = models.TextField(max_length=3000)
+    notes = models.TextField(max_length=3000, blank=True)
     status = models.CharField(
         max_length=20,
         choices=TargetStatus.choices,
